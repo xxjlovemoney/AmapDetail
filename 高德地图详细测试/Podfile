@@ -1,0 +1,9 @@
+
+# platform :ios, '9.0'
+
+target '高德地图详细测试' do
+pod 'AMap2DMap'
+pod 'AMapSearch'
+pod 'AMapLocation'
+
+end
