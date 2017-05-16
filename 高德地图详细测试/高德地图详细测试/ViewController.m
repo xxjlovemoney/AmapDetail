@@ -95,27 +95,52 @@
     [self.mapView addGestureRecognizer:longPressGep];
 }
 
+//-(void)longpressClick:(UILongPressGestureRecognizer *)gesture
+//{
+//    if (gesture.state == UIGestureRecognizerStateBegan) {
+//        //将相对于view的坐标转化为经纬度坐标
+//        CLLocationCoordinate2D coordinate = [self.mapView convertPoint:[gesture locationInView:self.mapView] toCoordinateFromView:self.mapView];
+//        
+//        //添加标注
+//        if (self.destinationPoint != nil) {
+//            //清理
+//            [self.mapView removeAnnotation:self.destinationPoint];
+//            self.destinationPoint = nil;
+//        }
+//        
+//        self.destinationPoint = [[MAPointAnnotation alloc]init];
+//        self.destinationPoint.coordinate = coordinate;
+//        self.destinationPoint.title = @"目的的";
+//        
+//        [self.mapView addAnnotation:self.destinationPoint];
+//        
+//    }
+//}
+
+//长按手势响应
 -(void)longpressClick:(UILongPressGestureRecognizer *)gesture
 {
     if (gesture.state == UIGestureRecognizerStateBegan) {
-        //将相对于view的坐标转化为经纬度坐标
-        CLLocationCoordinate2D coordinate = [self.mapView convertPoint:[gesture locationInView:self.mapView] toCoordinateFromView:self.mapView];
-        
-        //添加标注
-        if (self.destinationPoint != nil) {
-            //清理
-            [self.mapView removeAnnotation:self.destinationPoint];
-            self.destinationPoint = nil;
-        }
-        
-        self.destinationPoint = [[MAPointAnnotation alloc]init];
-        self.destinationPoint.coordinate = coordinate;
-        self.destinationPoint.title = @"目的的";
-        
-        [self.mapView addAnnotation:self.destinationPoint];
-        
+        CGPoint p = [gesture locationInView:self.mapView];
+        NSLog(@"长按的点 (%f , %f)",p.x,p.y);
     }
+    
+    //将点转换为经纬度
+    CLLocationCoordinate2D coordinate = [self.mapView convertPoint:[gesture locationInView:self.mapView] toCoordinateFromView:self.mapView];
+    
+    //将点作为目标点
+    if (self.destinationPoint != nil) {
+        //先清除
+        [self.mapView removeAnnotation:self.destinationPoint];
+        self.destinationPoint = nil;
+    }
+    //再将点坐标赋值给目标点
+    self.destinationPoint = [[MAPointAnnotation alloc]init];
+    self.destinationPoint.coordinate = coordinate;
+    self.destinationPoint.title = @"目标点";
+    [self.mapView addAnnotation:self.destinationPoint];
 }
+
 
 -(void)searchWay
 {
@@ -135,61 +160,112 @@
 /* 路径规划搜索回调. */
 - (void)onRouteSearchDone:(AMapRouteSearchBaseRequest *)request response:(AMapRouteSearchResponse *)response
 {
-    if (response.route > 0)
+//    if (response.route > 0)
+//    {
+//        [self.mapView removeOverlays:self.pathPolylines];
+//        self.pathPolylines = nil;
+//        
+//        //只显示第一条
+//        self.pathPolylines = [self polylinesForPath:response.route.paths[0]];
+//        [self.mapView addOverlays:self.pathPolylines];
+//        
+//        
+//        //解析第一条返回结果
+//        //搜索路线
+//        MAPointAnnotation *currentAnnotation = [[MAPointAnnotation alloc]init];
+//        currentAnnotation.coordinate = _mapView.userLocation.coordinate;
+//        [_mapView showAnnotations:@[_destinationPoint, currentAnnotation] animated:YES];
+//        [_mapView addAnnotation:currentAnnotation];
+//    }
+//    
+//    解析response获取路径信息，具体解析见 Demo
+    
+    
+    if(response.route == nil)
     {
-        [self.mapView removeOverlays:self.pathPolylines];
-        self.pathPolylines = nil;
-        
-        //只显示第一条
-        self.pathPolylines = [self polylinesForPath:response.route.paths[0]];
-        [self.mapView addOverlays:self.pathPolylines];
-        
-        //地图显示的范围
-        [self.mapView showAnnotations:@[self.destinationPoint,self.mapView.userLocation] animated:YES];
+        return;
     }
     
-    //解析response获取路径信息，具体解析见 Demo
-}
+    //通过AMapNavigationSearchResponse对象处理搜索结果
+    NSString *route = [NSString stringWithFormat:@"Navi: %@", response.route];
     
-//字符串解析
--(CLLocationCoordinate2D *)coordinatesForString:(NSString *)string coordinaCount:(NSUInteger *)coordinateCount parseToken:(NSString *)token
+    NSLog(@"%@", route);
+    AMapPath *path = response.route.paths[0];
+    AMapStep *step = path.steps[0];
+    NSLog(@"%@",step.polyline);
+    NSLog(@"%@",response.route.paths[0]);
+    
+    
+    if (response.count > 0)
+    {
+        //移除地图原本的遮盖
+        [_mapView removeOverlays:_pathPolylines];
+        _pathPolylines = nil;
+        
+        // 只显⽰示第⼀条 规划的路径
+        _pathPolylines = [self polylinesForPath:response.route.paths[0]];
+        NSLog(@"=========%@",response.route.paths[0]);
+        
+        //添加新的遮盖，然后会触发代理方法进行绘制
+        [_mapView addOverlays:_pathPolylines];
+        
+        //        解析第一条返回结果
+        //        搜索路线
+        MAPointAnnotation *currentAnnotation = [[MAPointAnnotation alloc]init];
+        currentAnnotation.coordinate = _mapView.userLocation.coordinate;
+        [_mapView showAnnotations:@[_destinationPoint, currentAnnotation] animated:YES];
+        [_mapView addAnnotation:currentAnnotation];
+    }
+}
+
+//解析经纬度
+- (CLLocationCoordinate2D *)coordinatesForString:(NSString *)string
+                                 coordinateCount:(NSUInteger *)coordinateCount
+                                      parseToken:(NSString *)token
 {
-    if (string == nil) {
+    if (string == nil)
+    {
         return NULL;
     }
     
-    if (token == nil) {
+    if (token == nil)
+    {
         token = @",";
     }
     
-    NSString * str=@"";
-    if ([token isEqualToString:@","]) {
+    NSString *str = @"";
+    if (![token isEqualToString:@","])
+    {
         str = [string stringByReplacingOccurrencesOfString:token withString:@","];
     }
+    
     else
     {
         str = [NSString stringWithString:string];
     }
     
-    NSArray * components = [str componentsSeparatedByString:@","];
-    
-    NSUInteger count = components.count / 2;
-    
-    if (coordinateCount !=NULL) {
+    NSArray *components = [str componentsSeparatedByString:@","];
+    NSUInteger count = [components count] / 2;
+    if (coordinateCount != NULL)
+    {
         *coordinateCount = count;
     }
+    CLLocationCoordinate2D *coordinates = (CLLocationCoordinate2D*)malloc(count * sizeof(CLLocationCoordinate2D));
     
-    CLLocationCoordinate2D * coordinates = (CLLocationCoordinate2D *)malloc(count * sizeof(CLLocationCoordinate2D));
-    
-    for (int i =0; i<count; i++) {
-        coordinates[i] . longitude = [[components objectAtIndex:2 * i] doubleValue];
-        coordinates[i].latitude = [[components objectAtIndex:2 *i + 1] doubleValue];
-        
+    for (int i = 0; i < count; i++)
+    {
+        coordinates[i].longitude = [[components objectAtIndex:2 * i]     doubleValue];
+        coordinates[i].latitude  = [[components objectAtIndex:2 * i + 1] doubleValue];
     }
+    
     
     return coordinates;
 }
-    
+
+
+
+
+//路线解析
 -(NSArray *)polylinesForPath:(AMapPath *)path
 {
     if (path == nil || path.steps.count == 0) {
@@ -198,7 +274,7 @@
     NSMutableArray * polylines = [NSMutableArray array];
     [path.steps enumerateObjectsUsingBlock:^(AMapStep * step, NSUInteger idx, BOOL * _Nonnull stop) {
         NSUInteger count = 0;
-        CLLocationCoordinate2D * coordinates = [self coordinatesForString:step.polyline coordinaCount:&count parseToken:@","];
+        CLLocationCoordinate2D * coordinates = [self coordinatesForString:step.polyline coordinateCount:&count parseToken:@";"];
         MAPolyline * polyline = [MAPolyline polylineWithCoordinates:coordinates count:count];
         [polylines addObject:polyline];
         
@@ -209,26 +285,67 @@
     return polylines;
 }
 #pragma maek --MAMapViewDelegate
+//每次添加路线，区域，或者大头针等都会触发下面的代理方法
+//绘制遮盖时执行的代理方法
 -(MAOverlayView *)mapView:(MAMapView *)mapView rendererForOverlay:(id<MAOverlay>)overlay
 {
     if ([overlay isKindOfClass:[MAPolyline class]]) {
         MAPolylineView * polylineView = [[MAPolylineView alloc]initWithPolyline:overlay];
         polylineView.lineWidth = 4;
         polylineView.strokeColor = [UIColor magentaColor];
+        //连接类型
+        polylineView.lineJoin = kCGLineJoinBevel;
         return polylineView;
     }
     return  nil;
 }
-    
-    
 
+
+
+/*
+ -(MAOverlayRenderer *)mapView:(MAMapView *)mapView rendererForOverlay:(id<MAOverlay>)overlay
+ {
+ // 自定义定位精度对应的MACircleView.
+//    if (overlay == mapView.userLocationAccuracyCircle)
+//    {
+//        MACircleRenderer *accuracyCircleRenderer = [[MACircleRenderer alloc] initWithCircle:overlay];
+//
+//        accuracyCircleRenderer.lineWidth    = 2.f;
+//        accuracyCircleRenderer.strokeColor  = [UIColor lightGrayColor];
+//        accuracyCircleRenderer.fillColor    = [UIColor colorWithRed:1 green:0 blue:0 alpha:.3];
+//
+//        return accuracyCircleRenderer;
+//    }
+
+
+    // 自定义定位精度对应的MACircleView.
+
+    //画路线
+    if ([overlay isKindOfClass:[MAPolyline class]])
+    {
+        //初始化一个路线类型的view
+        MAPolylineRenderer *polygonView = [[MAPolylineRenderer alloc] initWithPolyline:overlay];
+        //设置线宽颜色等
+        polygonView.lineWidth = 8.f;
+        polygonView.strokeColor = [UIColor colorWithRed:0.015 green:0.658 blue:0.986 alpha:1.000];
+        polygonView.fillColor = [UIColor colorWithRed:0.940 green:0.771 blue:0.143 alpha:0.800];
+        polygonView.lineJoin = kCGLineJoinRound;//连接类型
+        //返回view，就进行了添加
+        return polygonView;
+    }
+    return nil;
+}
+
+
+
+ */
 
 -(void)arrayInit
 {
     self.annotations = [NSMutableArray array];
     self.pois = nil;
 }
-    
+
 -(void)setUpTableView
 {
     self.tableView = [[UITableView alloc]initWithFrame:CGRectMake(0, CGRectGetHeight(self.view.bounds) * 0.5, CGRectGetWidth(self.view.bounds), CGRectGetHeight(self.view.bounds) * 0.5) style:UITableViewStylePlain];
